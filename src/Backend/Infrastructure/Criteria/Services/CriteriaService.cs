@@ -19,6 +19,69 @@ public sealed class CriteriaService : ICriteriaService
         _dbContext = dbContext;
     }
 
+    public async Task<IReadOnlyList<CriterionResponse>> GetTaskCriteriaAsync(Guid currentUserId, Guid taskId, CancellationToken cancellationToken)
+    {
+        var task = await _dbContext.Posts
+            .SingleOrDefaultAsync(x => x.Id == taskId && x.PostType == AssignmentPostType, cancellationToken);
+
+        if (task is null)
+        {
+            return Array.Empty<CriterionResponse>();
+        }
+
+        var isParticipant = await _dbContext.SubjectParticipants
+            .AnyAsync(x => x.SubjectId == task.SubjectId && x.UserId == currentUserId, cancellationToken);
+
+        if (!isParticipant)
+        {
+            return Array.Empty<CriterionResponse>();
+        }
+
+        var criteria = await _dbContext.Criteria
+            .Where(x => x.TaskId == taskId)
+            .OrderBy(x => x.Order)
+            .ThenBy(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        return criteria.Select(MapCriterion).ToList();
+    }
+
+    public async Task<CriterionCreateResult> CreateAsync(Guid currentUserId, Guid taskId, CreateCriterionRequest request, CancellationToken cancellationToken)
+    {
+        var task = await _dbContext.Posts
+            .SingleOrDefaultAsync(x => x.Id == taskId && x.PostType == AssignmentPostType, cancellationToken);
+
+        if (task is null)
+        {
+            return CriterionCreateResult.NotFound();
+        }
+
+        if (!await IsTeacherOrAdminAsync(currentUserId, task.SubjectId, cancellationToken))
+        {
+            return CriterionCreateResult.Forbidden();
+        }
+
+        var criterion = new Criterion
+        {
+            Id = Guid.NewGuid(),
+            TaskId = taskId,
+            Description = request.Description ?? string.Empty,
+            Format = request.Format ?? "checklist",
+            Weight = request.Weight,
+            MaxPoints = request.MaxPoints,
+            Points = request.Points,
+            IsBonus = request.IsBonus,
+            IsPenalty = request.IsPenalty,
+            Order = request.Order,
+            Task = task
+        };
+
+        _dbContext.Criteria.Add(criterion);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return CriterionCreateResult.Success(MapCriterion(criterion));
+    }
+
     public async Task<CriterionUpdateResult> UpdateAsync(Guid currentUserId, Guid criterionId, UpdateCriterionRequest request, CancellationToken cancellationToken)
     {
         var criterion = await _dbContext.Criteria

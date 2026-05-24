@@ -18,6 +18,47 @@ public sealed class CriteriaController : ControllerBase
         _criteriaService = criteriaService;
     }
 
+    [HttpGet("tasks/{taskId:guid}/criteria")]
+    [ProducesResponseType(typeof(IReadOnlyList<CriterionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> GetTaskCriteria([FromRoute] Guid taskId, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var criteria = await _criteriaService.GetTaskCriteriaAsync(userId.Value, taskId, cancellationToken);
+        return Ok(criteria);
+    }
+
+    [HttpPost("tasks/{taskId:guid}/criteria")]
+    [ProducesResponseType(typeof(CriterionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Create([FromRoute] Guid taskId, [FromBody] CreateCriterionRequest? request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized(CreateUnauthorized());
+        }
+
+        var result = await _criteriaService.CreateAsync(userId.Value, taskId, request ?? new CreateCriterionRequest(), cancellationToken);
+
+        return result.Status switch
+        {
+            CriterionCreateStatus.Success => CreatedAtAction(nameof(GetTaskCriteria), new { taskId }, result.Criterion),
+            CriterionCreateStatus.NotFound => NotFound(CreateNotFound()),
+            CriterionCreateStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden, CreateForbidden()),
+            _ => throw new InvalidOperationException("Unsupported criteria create status.")
+        };
+    }
+
     [HttpPatch("criteria/{id:guid}")]
     [ProducesResponseType(typeof(CriterionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

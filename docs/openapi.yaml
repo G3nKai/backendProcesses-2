@@ -1,0 +1,2032 @@
+openapi: 3.0.1
+info:
+  title: LMS API
+  version: 1.5.0
+servers:
+  - url: /api
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ProblemDetails:
+      type: object
+      description: Стандартный формат ошибок ASP.NET Core (RFC 7807)
+      properties:
+        type: { type: string, nullable: true }
+        title: { type: string, nullable: true }
+        status: { type: integer, nullable: true }
+        detail: { type: string, nullable: true }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+
+    Subject:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+      example:
+        id: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        title: "Проектирование архитектуры ПО"
+        description: "Курс по UML и паттернам проектирования"
+
+    Participant:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        username: { type: string }
+        role: { type: string, enum: [Student, Teacher, Admin] }
+
+    TeamDistributionMode:
+      type: string
+      enum: [Manual, Random, Students, Draft]
+
+    CaptainSelectionMethod:
+      type: string
+      enum: [Manual, Voting, Random]
+
+    SubmissionDecisionMode:
+      type: string
+      enum: [Voting, CaptainDecides]
+
+    TeamSettingsRequest:
+      type: object
+      properties:
+        distributionMode: { $ref: '#/components/schemas/TeamDistributionMode' }
+        fixedTeamsCount: { type: integer, nullable: true }
+        fixedTeamSize: { type: integer, nullable: true }
+        minTeamSize: { type: integer, nullable: true }
+        maxTeamSize: { type: integer, nullable: true }
+        captainSelectionMode: { $ref: '#/components/schemas/CaptainSelectionMethod', nullable: true }
+        captainVotingDeadlineDays: { type: integer, nullable: true }
+        requiresCaptain: { type: boolean, nullable: true }
+        decisionMode: { $ref: '#/components/schemas/SubmissionDecisionMode', nullable: true }
+        decisionDeadlineDays: { type: integer, nullable: true }
+        requiresDecision: { type: boolean, nullable: true }
+
+    TeamSettingsResponse:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        distributionMode: { $ref: '#/components/schemas/TeamDistributionMode' }
+        fixedTeamsCount: { type: integer, nullable: true }
+        fixedTeamSize: { type: integer, nullable: true }
+        minTeamSize: { type: integer, nullable: true }
+        maxTeamSize: { type: integer, nullable: true }
+        captainSelectionMode: { $ref: '#/components/schemas/CaptainSelectionMethod', nullable: true }
+        captainVotingDeadlineDays: { type: integer, nullable: true }
+        requiresCaptain: { type: boolean }
+        decisionMode: { $ref: '#/components/schemas/SubmissionDecisionMode', nullable: true }
+        decisionDeadlineDays: { type: integer, nullable: true }
+        requiresDecision: { type: boolean }
+        isFinalized: { type: boolean }
+        finalizedAt: { type: string, format: date-time, nullable: true }
+        captainSelectionMode: { $ref: '#/components/schemas/CaptainSelectionMethod', nullable: true }
+        captainVotingDeadlineDays: { type: integer, nullable: true }
+        requiresCaptain: { type: boolean }
+        decisionMode: { $ref: '#/components/schemas/SubmissionDecisionMode', nullable: true }
+        decisionDeadlineDays: { type: integer, nullable: true }
+        requiresDecision: { type: boolean }
+        warnings:
+          type: array
+          items: { type: string }
+
+    ManualTeamRequest:
+      type: object
+      properties:
+        memberIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    UnassignedStudentsResponse:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        studentIds:
+          type: array
+          items: { type: string, format: uuid }
+        students:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMember' }
+    ManualTeamDistributionRequest:
+      type: object
+      properties:
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/ManualTeamRequest' }
+
+    TeamMember:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        username: { type: string }
+        isCaptain: { type: boolean }
+
+    Team:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        subjectId: { type: string, format: uuid }
+        name: { type: string, nullable: true }
+        captainId: { type: string, format: uuid, nullable: true }
+        memberIds:
+          type: array
+          items: { type: string, format: uuid }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMember' }
+
+    TeamDistributionResponse:
+      type: object
+      properties:
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/Team' }
+        warnings:
+          type: array
+          items: { type: string }
+
+    RandomTeamPreviewTeam:
+      type: object
+      properties:
+        memberIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    RandomTeamDistributionSuggestion:
+      type: object
+      properties:
+        suggestedTeamsCount: { type: integer }
+        suggestedMinTeamSize: { type: integer }
+        suggestedMaxTeamSize: { type: integer }
+        suggestedFixedTeamSize: { type: integer, nullable: true }
+        suggestedTeamSizes:
+          type: array
+          items: { type: integer }
+
+    TeamRandomPreviewResponse:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        isValid: { type: boolean }
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/RandomTeamPreviewTeam' }
+        errors:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        suggestedParameters:
+          $ref: '#/components/schemas/RandomTeamDistributionSuggestion'
+
+    TeamValidationResponse:
+      type: object
+      properties:
+        isValid: { type: boolean }
+        errors:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+
+    TeamFinalizeResponse:
+      type: object
+      properties:
+        isFinalized: { type: boolean }
+        finalizedAt: { type: string, format: date-time, nullable: true }
+
+    # ==========================================
+    # DRAFT
+    # ==========================================
+    DraftStartRequest:
+      type: object
+      required: [captainIds]
+      properties:
+        captainIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: Список ID студентов-капитанов (порядок определяет очередь выбора)
+
+    DraftPickRequest:
+      type: object
+      required: [studentId]
+      properties:
+        studentId:
+          type: string
+          format: uuid
+          description: ID студента для выбора в команду
+
+    DraftStateResponse:
+      type: object
+      properties:
+        subjectId: { type: string, format: uuid }
+        isActive: { type: boolean, description: "Драфт активен" }
+        isCompleted: { type: boolean, description: "Драфт завершён" }
+        currentCaptainId: { type: string, format: uuid, nullable: true, description: "ID капитана, чья очередь выбирать" }
+        currentRound: { type: integer, description: "Номер текущего раунда" }
+        teams:
+          type: array
+          items: { $ref: '#/components/schemas/Team' }
+        availableStudents:
+          type: array
+          items: { $ref: '#/components/schemas/TeamMember' }
+          description: Студенты, которые ещё не распределены
+
+    # ==========================================
+    # STUDENTS SELF-ASSEMBLY
+    # ==========================================
+    StudentCreateTeamRequest:
+      type: object
+      properties:
+        name: { type: string, nullable: true, description: "Название команды" }
+
+    # ==========================================
+    # ИЕРАРХИЯ POST (Полиморфизм)
+    # ==========================================
+    BasePost:
+      type: object
+      discriminator:
+        propertyName: postType
+      required:
+        - postType
+      properties:
+        id: { type: string, format: uuid }
+        authorId: { type: string, format: uuid }
+        postType: { type: string, enum: [Announcement, Material, Assignment] }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Announcement:
+      allOf:
+        - $ref: '#/components/schemas/BasePost'
+        - type: object
+          description: Текстовое объявление
+
+    Material:
+      allOf:
+        - $ref: '#/components/schemas/BasePost'
+        - type: object
+          properties:
+            fileName: { type: string }
+            storagePath: { type: string }
+            fileSize: { type: integer }
+            downloadUrl: { type: string }
+
+    MaterialFileInfo:
+      type: object
+      properties:
+        fileName: { type: string }
+        fileSize: { type: integer }
+        downloadUrl: { type: string }
+
+    # ==========================================
+    # ВОПРОСЫ И ЗАДАНИЯ
+    # ==========================================
+    QuestionOption:
+      type: object
+      required: [id, text]
+      properties:
+        id: { type: string, format: uuid }
+        text: { type: string }
+
+    Question:
+      type: object
+      required: [id, questionType, questionData]
+      properties:
+        id: { type: string, format: uuid }
+        questionType: { type: string, enum: [SingleChoice, MultipleChoice, Text, File] }
+        questionData: { type: string }
+        options: 
+          type: array
+          description: Опции для выбора (только для SingleChoice и MultipleChoice)
+          items: { $ref: '#/components/schemas/QuestionOption' }
+      example:
+        id: "123e4567-e89b-12d3-a456-426614174000"
+        questionType: "MultipleChoice"
+        questionData: "Выберите порождающие паттерны"
+        options:
+          - id: "223e4567-e89b-12d3-a456-426614174001"
+            text: "Singleton"
+          - id: "323e4567-e89b-12d3-a456-426614174002"
+            text: "Factory Method"
+          - id: "423e4567-e89b-12d3-a456-426614174003"
+            text: "Observer"
+
+    Assignment:
+      allOf:
+        - $ref: '#/components/schemas/BasePost'
+        - type: object
+          properties:
+            subjectId: { type: string, format: uuid }
+            assignmentData: { type: string }
+            questions: 
+              type: array
+              items: { $ref: '#/components/schemas/Question' }
+
+    # ==========================================
+    # ОТВЕТЫ СТУДЕНТА (Полиморфизм)
+    # ==========================================
+    AnswerBase:
+      type: object
+      required: [questionId, answerType]
+      properties:
+        questionId: { type: string, format: uuid }
+        answerType: { type: string, enum: [SingleChoiceAnswer, MultipleChoiceAnswer, TextAnswer] }
+
+    SingleChoiceAnswer:
+      allOf:
+        - $ref: '#/components/schemas/AnswerBase'
+        - type: object
+          required: [selectedOptionId]
+          properties:
+            selectedOptionId: { type: string, format: uuid }
+
+    MultipleChoiceAnswer:
+      allOf:
+        - $ref: '#/components/schemas/AnswerBase'
+        - type: object
+          required: [selectedOptionIds]
+          properties:
+            selectedOptionIds:
+              type: array
+              items: { type: string, format: uuid }
+              minItems: 1
+
+    TextAnswer:
+      allOf:
+        - $ref: '#/components/schemas/AnswerBase'
+        - type: object
+          required: [text]
+          properties:
+            text: { type: string }
+
+    AnswerItem:
+      discriminator:
+        propertyName: answerType
+      oneOf:
+        - $ref: '#/components/schemas/SingleChoiceAnswer'
+        - $ref: '#/components/schemas/MultipleChoiceAnswer'
+        - $ref: '#/components/schemas/TextAnswer'
+
+    # ==========================================
+    # РЕШЕНИЯ И ОЦЕНКИ
+    # ==========================================
+    Submission:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        assignmentId: { type: string, format: uuid }
+        authorId: { type: string, format: uuid }
+        answers:
+          type: array
+          items: { $ref: '#/components/schemas/AnswerItem' }
+        status: { type: string, enum: [Draft, RequiresReview, Graded] }
+        submittedAt: { type: string, format: date-time, nullable: true }
+
+    SubmissionCreateRequest:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          items: { $ref: '#/components/schemas/AnswerItem' }
+
+    Grade:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        submissionId: { type: string, format: uuid }
+        score: { type: integer }
+        verdictText: { type: string }
+        verdictedAt: { type: string, format: date-time }
+
+    TeamGrade:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        assignmentId: { type: string, format: uuid }
+        submissionId: { type: string, format: uuid }
+        score: { type: integer }
+        verdictText: { type: string }
+        verdictedAt: { type: string, format: date-time }
+
+    TeamGradeCreateRequest:
+      type: object
+      required: [submissionId, score]
+      properties:
+        submissionId: { type: string, format: uuid }
+        score: { type: integer }
+        verdictText: { type: string }
+
+    TeamGradeUpdateRequest:
+      type: object
+      required: [score]
+      properties:
+        score: { type: integer }
+        verdictText: { type: string }
+
+    TeamMemberGrade:
+      type: object
+      properties:
+        id: { type: string, format: uuid, nullable: true }
+        teamGradeId: { type: string, format: uuid }
+        teamId: { type: string, format: uuid }
+        assignmentId: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        username: { type: string }
+        baseScore: { type: integer }
+        score: { type: integer }
+        isAdjusted: { type: boolean }
+        adjustedAt: { type: string, format: date-time, nullable: true }
+
+    TeamMemberGradeAdjustmentRequest:
+      type: object
+      required: [score]
+      properties:
+        score: { type: integer }
+    Comment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        targetType: { type: string, enum: [Post, Submission] }
+        targetId: { type: string, format: uuid }
+        authorId: { type: string, format: uuid }
+        text: { type: string }
+        createdAt: { type: string, format: date-time }
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==========================================
+  # USERS
+  # ==========================================
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Получить профиль текущего пользователя
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/User' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # SUBJECTS
+  # ==========================================
+  /subjects:
+    get:
+      tags: [Subjects]
+      summary: Получить список предметов
+      description: Возвращает предметы, в которых текущий пользователь является участником.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Subject' } } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Subjects]
+      summary: Создать предмет (создатель автоматически становится ADMIN)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { title: { type: string }, description: { type: string } } } } }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Subject' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}:
+    get:
+      tags: [Subjects]
+      summary: Получить информацию о предмете
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Subject' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Пользователь не состоит в предмете.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Subjects]
+      summary: Редактировать предмет
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { title: { type: string }, description: { type: string } } } } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Subject' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для роли ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Subjects]
+      summary: Удалить предмет
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для роли ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/join:
+    post:
+      tags: [Subjects]
+      summary: Присоединиться к предмету самостоятельно (роль Student)
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Успешно присоединен
+          content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # PARTICIPANTS
+  # ==========================================
+  /subjects/{subjectId}/participants:
+    get:
+      tags: [Participants]
+      summary: Получить список участников предмета
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Participant' } } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Пользователь не состоит в предмете.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Participants]
+      summary: Добавить участника вручную (только ADMIN)
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { userId: { type: string, format: uuid }, role: { type: string, enum: [Student, Teacher] } } } } }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/participants/{userId}:
+    patch:
+      tags: [Participants]
+      summary: Изменить роль пользователя
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { role: { type: string, enum: [Student, Teacher] } } } } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Participant' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только ADMIN. Передать роль ADMIN другому нельзя.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Participants]
+      summary: Удалить пользователя из предмета
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # ==========================================
+  # TEAMS
+  # ==========================================
+  /subjects/{subjectId}/teams/settings:
+    get:
+      tags: [Teams]
+      summary: Get team settings
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamSettingsResponse' }
+        '400':
+          description: Bad Request
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Teacher/Admin only.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Teams]
+      summary: Сохранить настройки формирования команд
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamSettingsRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamSettingsResponse' }
+        '400':
+          description: Bad Request
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams:
+    get:
+      tags: [Teams]
+      summary: Получить список команд предмета
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Team' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для участников предмета.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Teams]
+      summary: Создать одну команду вручную
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualTeamRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamDistributionResponse' }
+        '400':
+          description: Bad Request
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/{teamId}:
+    put:
+      tags: [Teams]
+      summary: Обновить состав команды
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualTeamRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamDistributionResponse' }
+        '400':
+          description: Bad Request
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+  /subjects/{subjectId}/teams/unassigned:
+    get:
+      tags: [Teams]
+      summary: Получить список нераспределённых студентов
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnassignedStudentsResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для участников предмета.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/random:
+    post:
+      tags: [Teams]
+      summary: Предпросмотр случайного распределения команд
+      description: Формирует случайный черновик команд без сохранения в БД.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRandomPreviewResponse' }
+        '400':
+          description: Constraints are infeasible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamRandomPreviewResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin в режиме Random.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/validate:
+    post:
+      tags: [Teams]
+      summary: Валидировать ручное распределение команд
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualTeamDistributionRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamValidationResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/manual:
+    post:
+      tags: [Teams]
+      summary: Ручное распределение команд
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualTeamDistributionRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamDistributionResponse' }
+        '400':
+          description: Bad Request
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/finalize:
+    post:
+      tags: [Teams]
+      summary: Подтвердить распределение команд
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamFinalizeResponse' }
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamValidationResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # DRAFT (Режим выбора капитанами)
+  # ==========================================
+  /subjects/{subjectId}/teams/draft/start:
+    post:
+      tags: [Teams - Draft]
+      summary: Запустить драфт
+      description: |
+        Преподаватель указывает капитанов (CaptainIds). Для каждого капитана создаётся команда.
+        Капитаны по очереди выбирают студентов из нераспределённых.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DraftStartRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DraftStateResponse' }
+        '400':
+          description: Bad Request (некорректные капитаны или настройки)
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/draft/state:
+    get:
+      tags: [Teams - Draft]
+      summary: Получить состояние драфта
+      description: Возвращает текущее состояние драфта (активен ли, чья очередь, команды и доступные студенты).
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DraftStateResponse' }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для участников предмета.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Драфт не найден.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/draft/pick:
+    post:
+      tags: [Teams - Draft]
+      summary: Выбрать студента в команду (pick)
+      description: |
+        Текущий капитан (или преподаватель) выбирает студента из списка нераспределённых.
+        После выбора ход переходит к следующему капитану.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DraftPickRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DraftStateResponse' }
+        '400':
+          description: Bad Request (студент уже в команде, драфт завершён и т.д.)
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только капитан, чья очередь, или Teacher/Admin.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # STUDENTS SELF-ASSEMBLY (Самостоятельный набор)
+  # ==========================================
+  /subjects/{subjectId}/teams/student-create:
+    post:
+      tags: [Teams - Students]
+      summary: Студент создаёт команду
+      description: |
+        В режиме Students студент может создать новую команду и стать её капитаном.
+        Студент не может создать команду, если уже состоит в другой.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StudentCreateTeamRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamDistributionResponse' }
+        '400':
+          description: Bad Request (уже в команде, превышен лимит команд)
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для студентов в режиме Students.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/{teamId}/join:
+    post:
+      tags: [Teams - Students]
+      summary: Студент вступает в команду
+      description: |
+        В режиме Students студент может вступить в существующую команду.
+        Студент не может вступить, если уже состоит в другой команде или команда заполнена.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamDistributionResponse' }
+        '400':
+          description: Bad Request (уже в команде, команда заполнена)
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для студентов в режиме Students.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /subjects/{subjectId}/teams/{teamId}/leave:
+    post:
+      tags: [Teams - Students]
+      summary: Студент покидает команду
+      description: |
+        В режиме Students студент может покинуть команду.
+        Капитан может покинуть команду только если он единственный участник (команда удаляется).
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeamDistributionResponse' }
+        '400':
+          description: Bad Request (капитан не может покинуть, не член команды)
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для студентов в режиме Students.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # POSTS (Лента: Announcement, Material)
+  # ==========================================
+  /subjects/{subjectId}/posts:
+    get:
+      tags: [Posts]
+      summary: Получить ленту постов предмета
+      description: Возвращает список Announcement и Material. Для получения Assignments используйте отдельный эндпоинт.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: postType
+          in: query
+          schema: { type: string, enum: [Announcement, Material] }
+          description: Фильтр по типу поста
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/Announcement'
+                    - $ref: '#/components/schemas/Material'
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для участников.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Posts]
+      summary: Создать пост в ленте (с поддержкой загрузки файлов для Material)
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                postType: { type: string, enum: [Announcement, Material] }
+                content: { type: string }
+                file: { type: string, format: binary, description: "Обязательно, если postType = Material" }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Announcement'
+                  - $ref: '#/components/schemas/Material'
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для участников предмета.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /posts/{postId}:
+    get:
+      tags: [Posts]
+      summary: Получить конкретный пост
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Announcement'
+                  - $ref: '#/components/schemas/Material'
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Posts]
+      summary: Редактировать пост
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { content: { type: string } } } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Announcement'
+                  - $ref: '#/components/schemas/Material'
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор или TEACHER/ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Posts]
+      summary: Удалить пост
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор или TEACHER/ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /posts/{postId}/file-info:
+    get:
+      tags: [Posts]
+      summary: Получить информацию о файле поста
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaterialFileInfo'
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+      security:
+        - BearerAuth: []
+
+  /posts/{postId}/file:
+    get:
+      tags: [Posts]
+      summary: Скачать файл поста
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+      security:
+        - BearerAuth: []
+
+  # ==========================================
+  # COMMENTS
+  # ==========================================
+  /comments:
+    get:
+      tags: [Comments]
+      summary: Получить комментарии к Посту или Решению
+      parameters:
+        - name: targetType
+          in: query
+          required: true
+          schema: { type: string, enum: [Post, Submission] }
+        - name: targetId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Comment' } } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Нет доступа к сущности.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Comments]
+      summary: Добавить комментарий
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetType: { type: string, enum: [Post, Submission] }
+                targetId: { type: string, format: uuid }
+                text: { type: string }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Comment' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /comments/{commentId}:
+    delete:
+      tags: [Comments]
+      summary: Удалить комментарий
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор или TEACHER/ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # ASSIGNMENTS
+  # ==========================================
+  /subjects/{subjectId}/assignments:
+    get:
+      tags: [Assignments]
+      summary: Получить список заданий
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Assignment' } } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только участники предмета.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Assignments]
+      summary: Создать задание (содержит вопросы)
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string }
+                assignmentData: { type: string }
+                questions: { type: array, items: { $ref: '#/components/schemas/Question' } }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Assignment' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Student не может создавать Assignment. Только TEACHER/ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /assignments/{assignmentId}:
+    get:
+      tags: [Assignments]
+      summary: Получить задание
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Assignment' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Assignments]
+      summary: Редактировать задание
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string }
+                assignmentData: { type: string }
+                questions: { type: array, items: { $ref: '#/components/schemas/Question' } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Assignment' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только TEACHER/ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Assignments]
+      summary: Удалить задание
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только TEACHER/ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # SUBMISSIONS
+  # ==========================================
+  /assignments/{assignmentId}/submissions:
+    get:
+      tags: [Submissions]
+      summary: Просмотр отправленных решений
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: isTeacher
+          in: query
+          schema: { type: boolean, default: true }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Submission' } } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Доступ запрещен.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Submissions]
+      summary: Создать решение (черновик)
+      description: У созданного решения автоматически устанавливается статус Draft. Сервер обязан валидировать структуру ответов на соответствие типам вопросов (SingleChoice, MultipleChoice, Text).
+      parameters:
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: isStudent
+          in: query
+          schema: { type: boolean, nullable: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmissionCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/Submission' } } }
+        '400':
+          description: Bad Request. Структура ответа не совпадает с типом вопроса (например, для Text вопроса прислан SingleChoiceAnswer).
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только STUDENT.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /submissions/{submissionId}:
+    get:
+      tags: [Submissions]
+      summary: Просмотр конкретного решения
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Submission' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор или TEACHER.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    patch:
+      tags: [Submissions]
+      summary: Редактировать контент решения
+      description: Разрешено редактировать массив `answers` только если статус решения == Draft. Сервер выполняет строгую валидацию соответствия типа ответов типам вопросов.
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmissionCreateRequest' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Submission' } } }
+        '400':
+          description: Bad Request. Ошибка валидации структуры ответов.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор. Нельзя менять, если статус не Draft.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /submissions/{submissionId}/submit:
+    post:
+      tags: [Submissions]
+      summary: Отправить решение на проверку
+      description: Смена статуса решения с Draft на RequiresReview. Передает решение преподавателю на проверку. Перед сменой статуса сервер может проверить, что все обязательные вопросы имеют ответ.
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Успешно отправлено
+          content: { application/json: { schema: { $ref: '#/components/schemas/Submission' } } }
+        '400':
+          description: Bad Request. Не на все вопросы дан ответ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /submissions/{submissionId}/withdraw:
+    post:
+      tags: [Submissions]
+      summary: Отменить отправку решения
+      description: Возвращает статус обратно с RequiresReview на Draft (возможно только если оценка еще не выставлена).
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Отправка отменена
+          content: { application/json: { schema: { $ref: '#/components/schemas/Submission' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор. Решение уже оценено.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  # ==========================================
+  # GRADES
+  # ==========================================
+  /submissions/{submissionId}/grade:
+    get:
+      tags: [Grades]
+      summary: Получить текущую оценку к решению
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Grade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только автор или TEACHER.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Grades]
+      summary: Оценить индивидуальное решение
+      description: Создает оценку и меняет статус Submission с RequiresReview на Graded. Для командных решений использовать /teams/{teamId}/assignments/{assignmentId}/grade
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score: { type: integer }
+                verdictText: { type: string }
+      responses:
+        '201':
+          description: Оценка выставлена
+          content: { application/json: { schema: { $ref: '#/components/schemas/Grade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Оценить решение может любой пользователь с ролью ПРЕПОДАВАТЕЛЬ. Для командных решений использовать /teams/{teamId}/assignments/{assignmentId}/grade
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Grades]
+      summary: Обновить оценку решения
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                score: { type: integer }
+                verdictText: { type: string }
+      responses:
+        '200':
+          description: Оценка обновлена
+          content: { application/json: { schema: { $ref: '#/components/schemas/Grade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Обновлять оценку командного решения через индивидуальный endpoint нельзя. Использовать /teams/{teamId}/assignments/{assignmentId}/grade
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Grades]
+      summary: Удалить оценку решения
+      parameters:
+        - name: submissionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Оценка удалена
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Удалять оценку командного решения через индивидуальный endpoint нельзя. Использовать /teams/{teamId}/assignments/{assignmentId}/grade
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /teams/{teamId}/assignments/{assignmentId}/grade:
+    get:
+      tags: [Grades]
+      summary: Получить оценку команды по заданию
+      description: Возвращает общую оценку команды для конкретного задания.
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для участников команды и пользователей с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    post:
+      tags: [Grades]
+      summary: Оценить командную работу по заданию
+      description: Создает общую оценку команды для конкретного задания. Если включен decision flow, оценить можно только approved submission.
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamGradeCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Команда, задание или финальное решение не найдено.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Grades]
+      summary: Обновить оценку команды по заданию
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamGradeUpdateRequest' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Grades]
+      summary: Удалить оценку команды по заданию
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Оценка еще не выставлена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+
+  /teams/{teamId}/assignments/{assignmentId}/students/{studentId}/grade:
+    get:
+      tags: [Grades]
+      summary: Получить итоговую оценку студента по командному заданию
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamMemberGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Доступно преподавателю, администратору или самому студенту.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Командная оценка или участник команды не найдены.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    put:
+      tags: [Grades]
+      summary: Установить индивидуальную итоговую оценку студенту
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TeamMemberGradeAdjustmentRequest' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/TeamMemberGrade' } } }
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ или ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Командная оценка или участник команды не найдены.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+    delete:
+      tags: [Grades]
+      summary: Удалить индивидуальную итоговую оценку студента
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: assignmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: No Content
+        '401':
+          description: Unauthorized
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '403':
+          description: Forbidden. Только для пользователей с ролью ПРЕПОДАВАТЕЛЬ или ADMIN.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }
+        '404':
+          description: Not Found. Индивидуальная корректировка не найдена.
+          content: { application/problem+json: { schema: { $ref: '#/components/schemas/ProblemDetails' } } }

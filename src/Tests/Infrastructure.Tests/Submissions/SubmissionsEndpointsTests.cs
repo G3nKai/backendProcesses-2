@@ -1,0 +1,446 @@
+﻿using Application.Submissions.Models;
+using FluentAssertions;
+using Infrastructure.Persistence.Entities;
+using Infrastructure.Tests.TestHost;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Xunit;
+
+namespace Infrastructure.Tests.Submissions;
+
+public sealed class SubmissionsEndpointsTests : IClassFixture<ApiWebApplicationFactory>
+{
+    private readonly HttpClient _client;
+
+    public SubmissionsEndpointsTests(ApiWebApplicationFactory factory)
+    {
+        _client = factory.CreateClient();
+    }
+
+    [Fact]
+    public async Task CreateSubmissionDraft_ShouldReturnCreated_WhenUserIsStudent()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Test", "Test");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);//post
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        SubmissionCreateRequest request = CreateSubmissionRequest();
+
+        var response =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
+    [Fact]
+    public async Task CreateSubmissionDraft_ShouldReturnForbidden_WhenUserIsNotStudent()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var teacher = await RegisterAndLoginAsync($"teacher_{Guid.NewGuid():N}");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", teacher.AccessToken);
+
+        await JoinSubjectAsync(teacher.AccessToken, subjectId, "Teacher");
+
+        SubmissionCreateRequest request = CreateSubmissionRequest();
+
+        var response =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=false", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task GetSubmissions_ShouldReturnOk_WhenUserIsTeacher()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var teacher = await RegisterAndLoginAsync($"teacher_{Guid.NewGuid():N}");
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", teacher.AccessToken);
+
+        await JoinSubjectAsync(teacher.AccessToken, subjectId, "Teacher");
+
+        var response =
+            await _client.GetAsync($"/api/assignments/{assignmentId}/submissions?limit=20&offset=0");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetSubmissions_ShouldReturnOnlyAuthorSubmissions_WhenUserIsStudentAndIsTeacherIsFalse()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student1 = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student1.AccessToken);
+
+        await JoinSubjectAsync(student1.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest request1 = CreateSubmissionRequest();
+        var submissionResponse1 =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request1);
+        submissionResponse1.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var student2 = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student2.AccessToken);
+
+        await JoinSubjectAsync(student2.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest request2 = CreateSubmissionRequest();
+        var submissionResponse2 =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request2);
+        submissionResponse2.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student1.AccessToken);
+
+        var response =
+            await _client.GetAsync($"/api/assignments/{assignmentId}/submissions?limit=20&offset=0&isTeacher=false");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        payload.ValueKind.Should().Be(JsonValueKind.Array);
+        payload.GetArrayLength().Should().Be(1);
+        payload[0].GetProperty("authorId").GetString().Should().Be(student1.UserId);
+    }
+
+    [Fact]
+    public async Task GetSubmission_ShouldReturnOk()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest request = CreateSubmissionRequest();
+        var createResponse =
+            await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", request);
+
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        var createdSubmission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        var response = await _client.GetAsync($"/api/submissions/{createdSubmission!.id}");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var submission = await response.Content.ReadFromJsonAsync<Submission>();
+        submission!.id.Should().Be(createdSubmission.id);
+    }
+
+    [Fact]
+    public async Task PatchSubmission_ShouldReturnForbidden_WhenStatusIsNotDraft()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        submission!.status = SubmissionStatusEnum.Graded;
+
+        var patchRequest = new SubmissionCreateRequest
+        {
+            answers = new List<AnswerItemDto>
+            {
+                new AnswerItemDto
+                {
+                    assignmentQuestionId = Guid.NewGuid(),
+                    answerType = AnswerTypeEnum.TextAnswer,
+                    text = "Updated answer"
+                }
+            }
+        };
+
+        var patchResponse = await _client.PatchAsJsonAsync($"/api/submissions/{submission.id}", patchRequest);
+
+        submission.status.Should().NotBe(SubmissionStatusEnum.Draft);
+        patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);//позже изменить на badrequest
+    }
+
+    [Fact]
+    public async Task PatchSubmission_ShouldUpdateAnswers_WhenStatusIsDraft()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        var student = await RegisterAndLoginAsync($"student_{Guid.NewGuid():N}");
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", student.AccessToken);
+
+        await JoinSubjectAsync(student.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var createdSubmission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        var patchRequest = new SubmissionCreateRequest
+        {
+            answers = new List<AnswerItemDto>
+        {
+            new AnswerItemDto
+            {
+                assignmentQuestionId = Guid.NewGuid(),
+                answerType = AnswerTypeEnum.TextAnswer,
+                text = "Updated answer"
+            }
+        }
+        };
+
+        var patchResponse = await _client.PatchAsJsonAsync($"/api/submissions/{createdSubmission!.id}", patchRequest);
+        patchResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await patchResponse.Content.ReadFromJsonAsync<Submission>();
+        updated!.answers.Should().ContainSingle(a => a.text == "Updated answer");
+        updated.status.Should().Be(SubmissionStatusEnum.Draft);
+    }
+
+    [Fact]
+    public async Task SubmitSubmission_ShouldChangeStatusToRequiresReview()
+    {
+        var owner = await RegisterAndLoginAsync($"owner_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(owner.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(owner.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", owner.AccessToken);
+
+        await JoinSubjectAsync(owner.AccessToken, subjectId, "Student");
+
+        SubmissionCreateRequest createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status.Should().Be(SubmissionStatusEnum.Draft);
+
+        var submitResponse = await _client.PostAsync($"/api/submissions/{submission.id}/submit", null);
+        submitResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updatedSubmission = await submitResponse.Content.ReadFromJsonAsync<Submission>();
+        updatedSubmission!.status.Should().Be(SubmissionStatusEnum.RequiresReview);
+    }
+
+    [Fact]
+    public async Task WithdrawSubmission_ShouldReturnDraft_WhenAuthorAndStatusIsRequiresReview()
+    {
+        var author = await RegisterAndLoginAsync($"author_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(author.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(author.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", author.AccessToken);
+        await JoinSubjectAsync(author.AccessToken, subjectId, "Student");
+
+        var createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", createRequest);
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status = SubmissionStatusEnum.RequiresReview;
+
+        var response = await _client.PostAsync($"/api/submissions/{submission.id}/withdraw", null);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var updated = await response.Content.ReadFromJsonAsync<Submission>();
+        updated!.status.Should().Be(SubmissionStatusEnum.Draft);
+    }
+
+    [Fact]
+    public async Task WithdrawSubmission_ShouldReturnForbidden_WhenNotAuthor()
+    {
+        var author = await RegisterAndLoginAsync($"author_{Guid.NewGuid():N}");
+        var otherUser = await RegisterAndLoginAsync($"other_{Guid.NewGuid():N}");
+
+        var subjectId = await CreateSubjectAsync(author.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(author.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", otherUser.AccessToken);
+        await JoinSubjectAsync(otherUser.AccessToken, subjectId, "Student");
+
+        var createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync(
+            $"/api/assignments/{assignmentId}/submissions?isStudent=true",
+            createRequest
+        );
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+
+        submission!.authorId.Should().NotBe(otherUser.UserId);
+
+        submission.status = SubmissionStatusEnum.RequiresReview;
+
+        var response = await _client.PostAsync($"/api/submissions/{submission.id}/withdraw", null);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task WithdrawSubmission_ShouldReturnForbidden_WhenStatusIsGraded()
+    {
+        var author = await RegisterAndLoginAsync($"author_{Guid.NewGuid():N}");
+        var subjectId = await CreateSubjectAsync(author.AccessToken, "Submissions", "Submissions");
+        var assignmentId = await CreateAssignmentAndGetIdAsync(author.AccessToken, subjectId);
+
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", author.AccessToken);
+        await JoinSubjectAsync(author.AccessToken, subjectId, "Student");
+
+        var createRequest = CreateSubmissionRequest();
+        var createResponse = await _client.PostAsJsonAsync($"/api/assignments/{assignmentId}/submissions?isStudent=true", createRequest);
+        var submission = await createResponse.Content.ReadFromJsonAsync<Submission>();
+        submission!.status = SubmissionStatusEnum.Graded;
+
+        submission.status.Should().Be(SubmissionStatusEnum.Graded);
+
+        var response = await _client.PostAsync($"/api/submissions/{submission.id}/withdraw", null);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    private static SubmissionCreateRequest CreateSubmissionRequest()
+    {
+        return new SubmissionCreateRequest
+        {
+            answers = new List<AnswerItemDto>
+            {
+                new AnswerItemDto
+                {
+                    assignmentQuestionId = Guid.NewGuid(),
+                    answerType = AnswerTypeEnum.SingleChoiceAnswer,
+                    selectedOptionId = Guid.NewGuid()
+                },
+                new AnswerItemDto
+                {
+                    assignmentQuestionId = Guid.NewGuid(),
+                    answerType = AnswerTypeEnum.MultipleChoiceAnswer,
+                    selectedOptionIds = new List<Guid> { Guid.NewGuid() }
+                },
+                new AnswerItemDto
+                {
+                    assignmentQuestionId = Guid.NewGuid(),
+                    answerType = AnswerTypeEnum.TextAnswer,
+                    text = "My answer"
+                }
+            }
+        };
+    }
+    private async Task<AuthUser> RegisterAndLoginAsync(string username)
+    {
+        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", new
+        {
+            username,
+            password = "StrongP@ssw0rd!"
+        });
+        registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var registerPayload = await registerResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var userId = registerPayload.GetProperty("id").GetString();
+
+        var loginResponse = await _client.PostAsJsonAsync("/api/auth/login", new
+        {
+            username,
+            password = "StrongP@ssw0rd!"
+        });
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var loginPayload = await loginResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var accessToken = loginPayload.GetProperty("accessToken").GetString();
+
+        return new AuthUser(userId!, accessToken!);
+    }
+    private async Task<string> CreateSubjectAsync(string accessToken, string title, string description)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _client.PostAsJsonAsync("/api/subjects", new
+        {
+            title,
+            description
+        });
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return payload.GetProperty("id").GetString()!;
+    }
+    private async Task<string> CreateAssignmentAndGetIdAsync(string accessToken, string subjectId)
+    {
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        var response = await _client.PostAsJsonAsync($"/api/subjects/{subjectId}/assignments", new
+        {
+            content = "Assignment",
+            assignmentData = "Data",
+            questions = new[]
+            {
+                new { id = Guid.NewGuid(), questionType = "Text", questionData = "Explain" }
+            }
+        });
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return payload.GetProperty("id").GetString()!;
+    }
+    private async Task JoinSubjectAsync(string accessToken, string subjectId, string role)
+    {
+        var request = new { role };
+        var response = await _client.PostAsJsonAsync($"/api/subjects/{subjectId}/join", request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+    private sealed record AuthUser(string UserId, string AccessToken);
+}
